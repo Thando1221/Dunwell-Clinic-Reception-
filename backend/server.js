@@ -11,6 +11,8 @@ import appointmentRoutes from "./routes/appointments.js";
 import bookingsRoute from "./routes/bookings.js";
 import usersRoutes from "./routes/users.js";
 import attendanceRoutes from "./routes/attendance.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
