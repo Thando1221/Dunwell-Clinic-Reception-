@@ -1,0 +1,33 @@
+// backend/routes/doctors.js
+import express from "express";
+import { poolPromise } from "../db.js";
+
+const router = express.Router();
+
+// ✅ Get all doctors
+router.get("/", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+
+    // Assuming doctors have UserRole = 'D'
+    const result = await pool.request().query(`
+      SELECT 
+        UserID AS id,
+        Name AS name,
+        Surname AS surname,
+        Email AS email,
+        ContactNo AS phone,
+        SANC_HPCSA AS registration
+      FROM Users
+      WHERE UserRole = 'N'
+      ORDER BY Surname ASC
+    `);
+
+    res.json(result.recordset);
+  } catch (error) {
+    console.error("❌ Error fetching doctors:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+export default router;
