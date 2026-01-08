@@ -4,7 +4,7 @@ import cors from "cors";
 import authRouter from "./routes/auth.js"; // your auth router
 import dashboardRouter from "./routes/dashboard.js";
 import patientsRouter from "./routes/patients.js";
-import addPatientsRoute from "./routes/Addpatients.js";
+import addPatientsRoute from "./routes/addpatients.js";
 import catalogueRoutes from "./routes/catalogue.js";
 import nurseRoutes from "./routes/nurses.js";
 import appointmentRoutes from "./routes/appointments.js";
