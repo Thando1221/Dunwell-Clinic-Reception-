@@ -18,8 +18,13 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Clock, LogIn, LogOut, RefreshCcw, Plane } from "lucide-react";
 
+/**
+ * ✅ API BASE URL (Vite-safe)
+ * Make sure .env has:
+ * VITE_API_URL=http://localhost:5000
+ * OR production backend URL
+ */
 const API_BASE = import.meta.env.VITE_API_URL;
-
 
 const Attendance = () => {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -32,7 +37,9 @@ const Attendance = () => {
   // ✅ Fetch employees
   const fetchEmployees = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/users`);
+      if (!API_BASE) throw new Error("API URL not configured");
+
+      const res = await fetch(`${API_BASE}/users`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load employees");
 
@@ -52,9 +59,12 @@ const Attendance = () => {
   const fetchAttendance = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${BASE_URL}/attendance/today`);
+      if (!API_BASE) throw new Error("API URL not configured");
+
+      const res = await fetch(`${API_BASE}/attendance/today`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch attendance");
+
       setAttendanceRecords(Array.isArray(data) ? data : []);
     } catch (err) {
       toast.error("Error fetching attendance");
@@ -69,46 +79,41 @@ const Attendance = () => {
     fetchAttendance();
   }, []);
 
-  // ✅ Clock In Logic with Time Validation and Single Entry Rule
+  // ✅ Clock In
   const handleClockIn = async () => {
     if (!selectedEmployeeIn) return toast.error("Select an employee");
 
-    // Check if employee already clocked in today
     const alreadyIn = attendanceRecords.find(
       (rec) => rec.UserID === parseInt(selectedEmployeeIn) && rec.TimeIn
     );
-    if (alreadyIn) return toast.warning("This employee has already clocked in today.");
+    if (alreadyIn)
+      return toast.warning("This employee has already clocked in today.");
 
     const now = new Date();
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    const totalMinutes = currentHours * 60 + currentMinutes;
+    const totalMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const nineAM = 9 * 60; // 09:00
-    const nineThirty = 9 * 60 + 30; // 09:30
+    const nineAM = 9 * 60;
+    const nineThirty = 9 * 60 + 30;
 
-    // Between 09:00 and 09:30
-    if (totalMinutes >= nineAM && totalMinutes <= nineThirty) {
-      toast.info("Arrived on time ✅");
-    }
-    // After 09:30
-    else if (totalMinutes > nineThirty) {
-      toast.warning("You are late ⏰ — remark will be set to 'Late'.");
-    }
-    // Before 09:00
-    else if (totalMinutes < nineAM) {
+    if (totalMinutes < nineAM) {
       toast.error("Please clock in at 09:00 ⏰");
       return;
+    } else if (totalMinutes <= nineThirty) {
+      toast.info("Arrived on time ✅");
+    } else {
+      toast.warning("You are late ⏰ — marked as Late.");
     }
 
     try {
-      const res = await fetch(`${BASE_URL}/attendance/clock-in`, {
+      const res = await fetch(`${API_BASE}/attendance/clock-in`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: selectedEmployeeIn }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
       toast.success(data.message || "Clocked in successfully");
       fetchAttendance();
     } catch (err) {
@@ -119,23 +124,26 @@ const Attendance = () => {
     }
   };
 
-  // ✅ Clock Out (only once)
+  // ✅ Clock Out
   const handleClockOut = async () => {
     if (!selectedEmployeeOut) return toast.error("Select an employee");
 
     const alreadyOut = attendanceRecords.find(
       (rec) => rec.UserID === parseInt(selectedEmployeeOut) && rec.TimeOut
     );
-    if (alreadyOut) return toast.warning("This employee has already clocked out today.");
+    if (alreadyOut)
+      return toast.warning("This employee has already clocked out today.");
 
     try {
-      const res = await fetch(`${BASE_URL}/attendance/clock-out`, {
+      const res = await fetch(`${API_BASE}/attendance/clock-out`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: selectedEmployeeOut }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
       toast.success(data.message || "Clocked out successfully");
       fetchAttendance();
     } catch (err) {
@@ -146,24 +154,28 @@ const Attendance = () => {
     }
   };
 
-  // ✅ Set On Leave (only once)
+  // ✅ Set On Leave
   const handleSetOnLeave = async () => {
     if (!selectedEmployeeLeave) return toast.error("Select an employee");
 
     const alreadyLeave = attendanceRecords.find(
-      (rec) => rec.UserID === parseInt(selectedEmployeeLeave) && rec.OnLeave === "Yes"
+      (rec) =>
+        rec.UserID === parseInt(selectedEmployeeLeave) &&
+        rec.OnLeave?.trim() === "Yes"
     );
     if (alreadyLeave)
-      return toast.warning("This employee is already marked as on leave today.");
+      return toast.warning("This employee is already on leave today.");
 
     try {
-      const res = await fetch(`${BASE_URL}/attendance/on-leave`, {
+      const res = await fetch(`${API_BASE}/attendance/on-leave`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: selectedEmployeeLeave }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
       toast.success(data.message || "Marked on leave successfully");
       fetchAttendance();
     } catch (err) {
@@ -183,25 +195,18 @@ const Attendance = () => {
         </p>
       </div>
 
-      {/* Clock In / Clock Out / On Leave */}
+      {/* Clock In / Out / Leave */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Clock In */}
-        <Card className="shadow-md">
+        <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-green-100">
-                <LogIn className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <CardTitle>Clock In</CardTitle>
-                <CardDescription>Record arrival</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Clock In</CardTitle>
+            <CardDescription>Record arrival</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label>Select Employee</Label>
             <Select value={selectedEmployeeIn} onValueChange={setSelectedEmployeeIn}>
-              <SelectTrigger className="h-11">
+              <SelectTrigger>
                 <SelectValue placeholder="Choose employee" />
               </SelectTrigger>
               <SelectContent>
@@ -212,29 +217,22 @@ const Attendance = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleClockIn} className="w-full h-11">
-              <Clock className="mr-2 h-4 w-4" /> Clock In
+            <Button onClick={handleClockIn} className="w-full">
+              <LogIn className="mr-2 h-4 w-4" /> Clock In
             </Button>
           </CardContent>
         </Card>
 
         {/* Clock Out */}
-        <Card className="shadow-md">
+        <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-red-100">
-                <LogOut className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <CardTitle>Clock Out</CardTitle>
-                <CardDescription>Record departure</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Clock Out</CardTitle>
+            <CardDescription>Record departure</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label>Select Employee</Label>
             <Select value={selectedEmployeeOut} onValueChange={setSelectedEmployeeOut}>
-              <SelectTrigger className="h-11">
+              <SelectTrigger>
                 <SelectValue placeholder="Choose employee" />
               </SelectTrigger>
               <SelectContent>
@@ -245,29 +243,25 @@ const Attendance = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleClockOut} variant="destructive" className="w-full h-11">
-              <Clock className="mr-2 h-4 w-4" /> Clock Out
+            <Button onClick={handleClockOut} variant="destructive" className="w-full">
+              <LogOut className="mr-2 h-4 w-4" /> Clock Out
             </Button>
           </CardContent>
         </Card>
 
-        {/* Set On Leave */}
-        <Card className="shadow-md">
+        {/* On Leave */}
+        <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <Plane className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <CardTitle>Set On Leave</CardTitle>
-                <CardDescription>Mark employee as on leave</CardDescription>
-              </div>
-            </div>
+            <CardTitle>Set On Leave</CardTitle>
+            <CardDescription>Mark employee as on leave</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Label>Select Employee</Label>
-            <Select value={selectedEmployeeLeave} onValueChange={setSelectedEmployeeLeave}>
-              <SelectTrigger className="h-11">
+            <Select
+              value={selectedEmployeeLeave}
+              onValueChange={setSelectedEmployeeLeave}
+            >
+              <SelectTrigger>
                 <SelectValue placeholder="Choose employee" />
               </SelectTrigger>
               <SelectContent>
@@ -278,66 +272,39 @@ const Attendance = () => {
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleSetOnLeave} className="w-full h-11 bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSetOnLeave} className="w-full">
               <Plane className="mr-2 h-4 w-4" /> Set On Leave
             </Button>
           </CardContent>
         </Card>
       </div>
 
-      {/* Attendance Table */}
-      <Card className="shadow-md">
+      {/* Attendance List */}
+      <Card>
         <CardHeader className="flex justify-between items-center">
           <CardTitle>Today's Attendance</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchAttendance}
-            disabled={loading}
-          >
-            <RefreshCcw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <Button variant="outline" size="sm" onClick={fetchAttendance} disabled={loading}>
+            <RefreshCcw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </CardHeader>
         <CardContent>
           {attendanceRecords.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              No attendance records yet for today.
+            <p className="text-sm text-muted-foreground">
+              No attendance records for today.
             </p>
           ) : (
-            <div className="space-y-2">
-              {attendanceRecords.map((record, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition"
-                >
-                  <div>
-                    <div className="font-medium">
-                      {record.Name} {record.Surname}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      In: {record.TimeIn || "-"} | Out: {record.TimeOut || "-"} | Leave:{" "}
-                      {record.OnLeave?.trim() || "No"}
-                    </div>
-                  </div>
-                  <span
-                    className={`text-sm font-medium ${
-                      record.OnLeave?.trim() === "Yes"
-                        ? "text-blue-600"
-                        : record.TimeOut
-                        ? "text-gray-600"
-                        : "text-green-600"
-                    }`}
-                  >
-                    {record.OnLeave?.trim() === "Yes"
-                      ? "On Leave"
-                      : record.TimeOut
-                      ? "Completed"
-                      : "Active"}
-                  </span>
+            attendanceRecords.map((rec, i) => (
+              <div key={i} className="border rounded-lg p-4 mb-2">
+                <div className="font-medium">
+                  {rec.Name} {rec.Surname}
                 </div>
-              ))}
-            </div>
+                <div className="text-sm text-muted-foreground">
+                  In: {rec.TimeIn || "-"} | Out: {rec.TimeOut || "-"} | Leave:{" "}
+                  {rec.OnLeave || "No"}
+                </div>
+              </div>
+            ))
           )}
         </CardContent>
       </Card>
