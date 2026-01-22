@@ -1,6 +1,5 @@
 import express from "express";
-import poolPromise from "../db.js"; // your existing mssql poolPromise
-import sql from "mssql";
+import { query } from "../db.js";
 
 const router = express.Router();
 
@@ -10,8 +9,7 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
   try {
-    const pool = await poolPromise;
-    const result = await pool.request().query(`
+    const result = await query(`
       SELECT 
         a.AppointID AS id,
         p.PatientName + ' ' + p.PatientSurname AS patientName,
@@ -39,7 +37,7 @@ router.get("/", async (req, res) => {
       ORDER BY a.StartTime ASC
     `);
 
-    res.json(result.recordset);
+    res.json(result);
   } catch (err) {
     console.error("❌ Error fetching bookings:", err);
     res.status(500).json({ message: "Server error while fetching today's bookings", error: err.message });
@@ -51,12 +49,10 @@ router.get("/", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
     const id = parseInt(req.params.id, 10);
 
-    const result = await pool.request()
-      .input("id", sql.Int, id)
-      .query(`
+    const result = await query(
+      `
         SELECT 
           a.AppointID AS id,
           p.PatientName + ' ' + p.PatientSurname AS patientName,
@@ -80,11 +76,13 @@ router.get("/:id", async (req, res) => {
         FROM Appointments a
         LEFT JOIN Patients p ON a.PatientID = p.PatientID
         LEFT JOIN Users u ON a.UserID = u.UserID
-        WHERE a.AppointID = @id
-      `);
+        WHERE a.AppointID = @p0
+      `,
+      [id]
+    );
 
-    if (!result.recordset.length) return res.status(404).json({ message: "Booking not found" });
-    res.json(result.recordset[0]);
+    if (!result.length) return res.status(404).json({ message: "Booking not found" });
+    res.json(result[0]);
   } catch (err) {
     console.error("❌ Error fetching booking by id:", err);
     res.status(500).json({ message: "Server error fetching booking", error: err.message });
@@ -93,11 +91,10 @@ router.get("/:id", async (req, res) => {
 
 /**
  * PUT /api/bookings/:id
- * Update booking fields (everything except PatientID / patient name)
+ * Update booking fields
  */
 router.put("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
     const id = parseInt(req.params.id, 10);
     const body = req.body || {};
 
@@ -116,45 +113,38 @@ router.put("/:id", async (req, res) => {
       "isFollow_Up",
       "IsStudent",
       "MedicalAid_MainMember",
-      "MainMember__IDNo"
+      "MainMember__IDNo",
     ];
 
     const setClauses = [];
-    const request = pool.request();
-    request.input("id", sql.Int, id);
+    const params = [];
 
     allowed.forEach((field) => {
       if (body[field] !== undefined) {
-        setClauses.push(`[${field}] = @${field}`);
-        // handle datetime fields explicitly
-        if (field === "StartTime" || field === "EndTime") {
-          request.input(field, sql.DateTime2, body[field] ? new Date(body[field]) : null);
-        } else if (field === "UserID" || field === "ServicePrice" || field === "FinalPrice") {
-          request.input(field, sql.Float, body[field]);
-        } else if (field === "IsStudent" || field === "isFollow_Up") {
-          request.input(field, sql.Bit, body[field]);
-        } else {
-          request.input(field, sql.NVarChar, body[field]);
-        }
+        setClauses.push(`[${field}] = @p${params.length}`);
+        let value = body[field];
+
+        if (field === "StartTime" || field === "EndTime") value = value ? new Date(value) : null;
+        if (field === "UserID" || field === "ServicePrice" || field === "FinalPrice") value = parseFloat(value);
+        if (field === "IsStudent" || field === "isFollow_Up") value = value ? 1 : 0;
+
+        params.push(value);
       }
     });
 
-    if (setClauses.length === 0) {
-      return res.status(400).json({ message: "No updatable fields provided." });
-    }
+    if (setClauses.length === 0) return res.status(400).json({ message: "No updatable fields provided." });
 
-    const updateQuery = `
-      UPDATE Appointments
-      SET ${setClauses.join(", ")}
-      WHERE AppointID = @id
-    `;
+    params.push(id); // last param for WHERE clause
 
-    await request.query(updateQuery);
+    // Update query
+    await query(
+      `UPDATE Appointments SET ${setClauses.join(", ")} WHERE AppointID = @p${params.length - 1}`,
+      params
+    );
 
     // Return updated booking
-    const updated = await pool.request()
-      .input("id", sql.Int, id)
-      .query(`
+    const updated = await query(
+      `
         SELECT 
           a.AppointID AS id,
           p.PatientName + ' ' + p.PatientSurname AS patientName,
@@ -178,10 +168,12 @@ router.put("/:id", async (req, res) => {
         FROM Appointments a
         LEFT JOIN Patients p ON a.PatientID = p.PatientID
         LEFT JOIN Users u ON a.UserID = u.UserID
-        WHERE a.AppointID = @id
-      `);
+        WHERE a.AppointID = @p0
+      `,
+      [id]
+    );
 
-    res.json({ message: "Booking updated successfully", booking: updated.recordset[0] });
+    res.json({ message: "Booking updated successfully", booking: updated[0] });
   } catch (err) {
     console.error("❌ Update booking error:", err);
     res.status(500).json({ message: "Failed to update booking", error: err.message });
@@ -193,10 +185,9 @@ router.put("/:id", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
     const id = parseInt(req.params.id, 10);
 
-    await pool.request().input("id", sql.Int, id).query("DELETE FROM Appointments WHERE AppointID = @id");
+    await query("DELETE FROM Appointments WHERE AppointID = @p0", [id]);
 
     res.json({ message: "Booking deleted successfully" });
   } catch (err) {
