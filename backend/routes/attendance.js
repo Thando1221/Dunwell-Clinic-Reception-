@@ -3,7 +3,10 @@ import { query } from "../db.js";
 
 const router = express.Router();
 
-// ✅ Get today's attendance
+/**
+ * GET /api/attendance/today
+ * Fetch today's attendance
+ */
 router.get("/today", async (req, res) => {
   try {
     const result = await query(`
@@ -21,12 +24,13 @@ router.get("/today", async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("❌ Fetch Attendance Error:", err);
-    res.status(500).json({ error: "Database error fetching attendance" });
+    res.status(500).json({ error: "Database error fetching attendance", details: err.message });
   }
 });
 
-
-// ✅ Clock In route
+/**
+ * POST /api/attendance/clock-in
+ */
 router.post("/clock-in", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -37,24 +41,19 @@ router.post("/clock-in", async (req, res) => {
       `SELECT * FROM Register WHERE UserID = @p0 AND Date = CAST(GETDATE() AS DATE)`,
       [userId]
     );
+
     if (existing.length > 0) {
-      return res.status(400).json({ error: "You have already clocked in or are marked on leave today." });
+      return res.status(400).json({ error: "Already clocked in or marked on leave today." });
     }
 
-    // Get current time
+    // Current time and remarks
     const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const currentTime = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-
-    // Compare with 09:00 and 09:30
     const nineAM = new Date(now);
     nineAM.setHours(9, 0, 0, 0);
     const nineThirty = new Date(now);
     nineThirty.setHours(9, 30, 0, 0);
 
-    let remark = "";
-
+    let remark;
     if (now < nineAM) {
       return res.status(400).json({ error: "Please clock in at 09:00." });
     } else if (now >= nineAM && now <= nineThirty) {
@@ -63,7 +62,6 @@ router.post("/clock-in", async (req, res) => {
       remark = "Late";
     }
 
-    // Insert new attendance record
     await query(
       `INSERT INTO Register (UserID, Date, TimeIn, OnLeave, remark_OnArrival)
        VALUES (@p0, CAST(GETDATE() AS DATE), CONVERT(time, GETDATE()), 'No', @p1)`,
@@ -73,30 +71,31 @@ router.post("/clock-in", async (req, res) => {
     res.json({ message: `Clocked in successfully (${remark})` });
   } catch (err) {
     console.error("❌ Clock In Error:", err);
-    res.status(500).json({ error: "Database error during clock in" });
+    res.status(500).json({ error: "Database error during clock in", details: err.message });
   }
 });
 
-
-// ✅ Clock Out route
+/**
+ * POST /api/attendance/clock-out
+ */
 router.post("/clock-out", async (req, res) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: "User ID required" });
 
-    // Check if clocked in today
+    // Fetch today's record
     const existing = await query(
       `SELECT * FROM Register WHERE UserID = @p0 AND Date = CAST(GETDATE() AS DATE)`,
       [userId]
     );
 
-    if (existing.length === 0) {
+    if (!existing.length) {
       return res.status(400).json({ error: "You haven't clocked in today." });
     }
 
     const record = existing[0];
     if (record.TimeOut) {
-      return res.status(400).json({ error: "You have already clocked out today." });
+      return res.status(400).json({ error: "Already clocked out today." });
     }
 
     await query(
@@ -110,12 +109,13 @@ router.post("/clock-out", async (req, res) => {
     res.json({ message: "Clocked out successfully." });
   } catch (err) {
     console.error("❌ Clock Out Error:", err);
-    res.status(500).json({ error: "Database error during clock out" });
+    res.status(500).json({ error: "Database error during clock out", details: err.message });
   }
 });
 
-
-// ✅ On Leave route
+/**
+ * POST /api/attendance/on-leave
+ */
 router.post("/on-leave", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -126,8 +126,9 @@ router.post("/on-leave", async (req, res) => {
       `SELECT * FROM Register WHERE UserID = @p0 AND Date = CAST(GETDATE() AS DATE)`,
       [userId]
     );
+
     if (existing.length > 0) {
-      return res.status(400).json({ error: "You have already recorded attendance or leave today." });
+      return res.status(400).json({ error: "Attendance already recorded today." });
     }
 
     await query(
@@ -139,7 +140,7 @@ router.post("/on-leave", async (req, res) => {
     res.json({ message: "Employee marked as on leave for today." });
   } catch (err) {
     console.error("❌ On Leave Error:", err);
-    res.status(500).json({ error: "Database error setting leave" });
+    res.status(500).json({ error: "Database error setting leave", details: err.message });
   }
 });
 
