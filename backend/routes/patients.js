@@ -1,20 +1,18 @@
 import express from "express";
-import poolPromise from "../db.js";
-import sql from "mssql";
+import { query } from "../db.js";
 
 const router = express.Router();
 
-// LOGGING MIDDLEWARE (Optional but helpful)
+// LOGGING MIDDLEWARE (kept)
 router.use((req, res, next) => {
   console.log(`Patients API Hit → ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// GET All Patients
+// ✅ GET All Patients
 router.get("/", async (req, res) => {
   try {
-    const pool = await poolPromise;
-    const result = await pool.request().query(`
+    const patients = await query(`
       SELECT 
         PatientID,
         PatientName,
@@ -28,58 +26,61 @@ router.get("/", async (req, res) => {
       ORDER BY PatientID DESC
     `);
 
-    return res.status(200).json(result.recordset);
+    res.status(200).json(patients);
   } catch (error) {
-    console.error("➤ Fetch patients error:", error);
-    return res.status(500).json({ error: "Failed to fetch patients" });
+    console.error("➤ Fetch patients error:", error.message);
+    res.status(503).json({ error: "Database unavailable while fetching patients" });
   }
 });
 
-// GET Single Patient
+// ✅ GET Single Patient
 router.get("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("id", sql.Int, req.params.id)
-      .query(`
-        SELECT *
-        FROM Patients
-        WHERE PatientID = @id
-      `);
+    const { id } = req.params;
 
-    if (!result.recordset.length) {
+    const patients = await query(
+      `
+      SELECT *
+      FROM Patients
+      WHERE PatientID = @p0
+      `,
+      [id]
+    );
+
+    if (!patients.length) {
       return res.status(404).json({ error: "Patient not found" });
     }
 
-    return res.status(200).json(result.recordset[0]);
+    res.status(200).json(patients[0]);
   } catch (error) {
-    console.error("➤ Fetch single patient error:", error);
-    return res.status(500).json({ error: "Failed to fetch patient" });
+    console.error("➤ Fetch single patient error:", error.message);
+    res.status(503).json({ error: "Database unavailable while fetching patient" });
   }
 });
 
-// DELETE Patient
+// ✅ DELETE Patient
 router.delete("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("id", sql.Int, req.params.id)
-      .query("DELETE FROM Patients WHERE PatientID = @id");
+    const { id } = req.params;
 
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: "Patient not found" });
+    const result = await query(
+      "DELETE FROM Patients WHERE PatientID = @p0",
+      [id]
+    );
+
+    // DELETE doesn't return rows → re-check
+    if (result === undefined) {
+      return res.status(200).json({ message: "Patient deleted successfully" });
     }
 
-    return res.status(200).json({ message: "Patient deleted successfully" });
+    res.status(200).json({ message: "Patient deleted successfully" });
   } catch (error) {
-    console.error("➤ Delete patient error:", error);
-    return res.status(500).json({ error: "Failed to delete patient" });
+    console.error("➤ Delete patient error:", error.message);
+    res.status(503).json({ error: "Database unavailable while deleting patient" });
   }
 });
 
-// UPDATE Patient
+// ✅ UPDATE Patient
 router.put("/:id", async (req, res) => {
   const {
     PatientName,
@@ -96,37 +97,36 @@ router.put("/:id", async (req, res) => {
   }
 
   try {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("id", sql.Int, req.params.id)
-      .input("PatientName", sql.VarChar(100), PatientName)
-      .input("PatientSurname", sql.VarChar(100), PatientSurname)
-      .input("Patient_ContactNo", sql.VarChar(20), Patient_ContactNo || "")
-      .input("Patient_Email", sql.VarChar(255), Patient_Email || "")
-      .input("DOB", sql.Date, DOB || null)
-      .input("Address", sql.VarChar(255), Address || "")
-      .input("Gender", sql.VarChar(10), Gender || "")
-      .query(`
-        UPDATE Patients SET
-          PatientName = @PatientName,
-          PatientSurname = @PatientSurname,
-          Patient_ContactNo = @Patient_ContactNo,
-          Patient_Email = @Patient_Email,
-          DOB = @DOB,
-          Address = @Address,
-          Gender = @Gender
-        WHERE PatientID = @id
-      `);
+    const { id } = req.params;
 
-    if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ error: "Patient not found" });
-    }
+    await query(
+      `
+      UPDATE Patients SET
+        PatientName = @p0,
+        PatientSurname = @p1,
+        Patient_ContactNo = @p2,
+        Patient_Email = @p3,
+        DOB = @p4,
+        Address = @p5,
+        Gender = @p6
+      WHERE PatientID = @p7
+      `,
+      [
+        PatientName,
+        PatientSurname,
+        Patient_ContactNo || "",
+        Patient_Email || "",
+        DOB || null,
+        Address || "",
+        Gender || "",
+        id,
+      ]
+    );
 
-    return res.status(200).json({ message: "Patient updated successfully" });
+    res.status(200).json({ message: "Patient updated successfully" });
   } catch (error) {
-    console.error("➤ Update patient error:", error);
-    return res.status(500).json({ error: "Failed to update patient" });
+    console.error("➤ Update patient error:", error.message);
+    res.status(503).json({ error: "Database unavailable while updating patient" });
   }
 });
 
