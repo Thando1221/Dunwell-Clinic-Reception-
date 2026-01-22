@@ -7,30 +7,49 @@ const config = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   server: process.env.DB_SERVER,
-  port: parseInt(process.env.DB_PORT, 10),
+  port: parseInt(process.env.DB_PORT || "1433", 10),
   options: {
-    encrypt: process.env.DB_ENCRYPT === "true",
-    trustServerCertificate:
-      process.env.DB_TRUST_SERVER_CERTIFICATE === "true",
+    encrypt: true, // Azure SQL requires this
+    trustServerCertificate: false,
   },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000,
+  },
+  connectionTimeout: 30000,
 };
 
-// ✅ Create and connect pool
-const pool = new sql.ConnectionPool(config);
-const poolConnect = pool.connect();
+let pool = null;
 
-// ✅ Helper query function
+// ✅ Lazy connection (connect ONLY when needed)
+async function getPool() {
+  try {
+    if (!pool) {
+      pool = await sql.connect(config);
+      console.log("✅ SQL connected");
+    }
+    return pool;
+  } catch (err) {
+    console.error("❌ SQL connection failed:", err.message);
+    pool = null;
+    throw err;
+  }
+}
+
+// ✅ Query helper
 export async function query(q, params = []) {
-  await poolConnect;
+  const pool = await getPool();
   const request = pool.request();
-  params.forEach((p, i) => request.input(`p${i}`, p));
+
+  params.forEach((p, i) => {
+    request.input(`p${i}`, p);
+  });
+
   const result = await request.query(q);
   return result.recordset;
 }
 
-// ✅ Default export (to match your other imports)
-const poolPromise = poolConnect.then(() => pool);
-export default poolPromise;
-
-// ✅ Also export sql for use in routes
+// Optional exports
 export { sql };
+export default getPool;
