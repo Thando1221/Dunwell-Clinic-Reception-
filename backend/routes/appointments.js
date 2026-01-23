@@ -12,7 +12,7 @@ router.post("/", async (req, res) => {
     const {
       PatientID,
       StartTime,
-      EndTime,
+      EndTime, // ✅ may be NULL
       UserID,
       ServiceName,
       PaymentMethod,
@@ -27,23 +27,32 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     /* -------------------------
-       ✅ VALIDATE & FIX DATES
+       ✅ VALIDATE DATES (NULL-SAFE)
     -------------------------- */
     const start = new Date(StartTime);
-    const end = new Date(EndTime);
 
-    if (isNaN(start) || isNaN(end)) {
+    if (isNaN(start)) {
       return res.status(400).json({
-        error: "Invalid date format for StartTime or EndTime",
-        StartTime,
-        EndTime
+        error: "Invalid StartTime format",
+        StartTime
       });
     }
 
-    if (start >= end) {
-      return res.status(400).json({
-        error: "EndTime must be after StartTime"
-      });
+    let end = null;
+    if (EndTime !== null && EndTime !== undefined) {
+      end = new Date(EndTime);
+      if (isNaN(end)) {
+        return res.status(400).json({
+          error: "Invalid EndTime format",
+          EndTime
+        });
+      }
+
+      if (start >= end) {
+        return res.status(400).json({
+          error: "EndTime must be after StartTime"
+        });
+      }
     }
 
     /* -------------------------
@@ -92,8 +101,8 @@ router.post("/", async (req, res) => {
       [
         PatientID,
         MedicalAidNumber ?? null,
-        start, // ✅ Date object (FIX)
-        end,   // ✅ Date object (FIX)
+        start,           // ✅ always valid
+        end,             // ✅ NULL allowed
         UserID,
         MedicalAidName ?? null,
         Status ?? "Booked",
@@ -237,11 +246,21 @@ router.put("/:id", async (req, res) => {
       if (Object.prototype.hasOwnProperty.call(body, field)) {
         let value = body[field];
 
-        // ✅ Convert date fields safely
-        if (field === "StartTime" || field === "EndTime") {
+        // ✅ NULL-safe date handling
+        if (field === "StartTime" && value) {
           const d = new Date(value);
           if (isNaN(d)) return;
           value = d;
+        }
+
+        if (field === "EndTime") {
+          if (value === null) {
+            value = null;
+          } else {
+            const d = new Date(value);
+            if (isNaN(d)) return;
+            value = d;
+          }
         }
 
         updates.push(`[${field}] = @p${params.length}`);
