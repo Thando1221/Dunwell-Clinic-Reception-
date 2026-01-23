@@ -26,7 +26,29 @@ router.post("/", async (req, res) => {
       FinalPrice
     } = req.body;
 
-    // Fetch service price & discount
+    /* -------------------------
+       ✅ VALIDATE & FIX DATES
+    -------------------------- */
+    const start = new Date(StartTime);
+    const end = new Date(EndTime);
+
+    if (isNaN(start) || isNaN(end)) {
+      return res.status(400).json({
+        error: "Invalid date format for StartTime or EndTime",
+        StartTime,
+        EndTime
+      });
+    }
+
+    if (start >= end) {
+      return res.status(400).json({
+        error: "EndTime must be after StartTime"
+      });
+    }
+
+    /* -------------------------
+       FETCH SERVICE PRICE
+    -------------------------- */
     const priceResult = await query(
       `SELECT Price, discount
        FROM Catalogue
@@ -39,9 +61,14 @@ router.post("/", async (req, res) => {
     }
 
     const { Price, discount } = priceResult[0];
-    const computedFinalPrice = FinalPrice ?? (IsStudent && discount > 0 ? discount : Price);
 
-    // Insert appointment
+    const computedFinalPrice =
+      FinalPrice ??
+      (IsStudent && discount > 0 ? discount : Price);
+
+    /* -------------------------
+       INSERT APPOINTMENT
+    -------------------------- */
     await query(
       `INSERT INTO Appointments (
         PatientID,
@@ -64,27 +91,30 @@ router.post("/", async (req, res) => {
       )`,
       [
         PatientID,
-        MedicalAidNumber,
-        StartTime,
-        EndTime,
+        MedicalAidNumber ?? null,
+        start, // ✅ Date object (FIX)
+        end,   // ✅ Date object (FIX)
         UserID,
-        MedicalAidName,
-        Status,
+        MedicalAidName ?? null,
+        Status ?? "Booked",
         ServiceName,
         Price,
-        MedicalAid_MainMember,
-        MainMember__IDNo,
-        MedicalAid_option,
+        MedicalAid_MainMember ?? null,
+        MainMember__IDNo ?? null,
+        MedicalAid_option ?? null,
         PaymentMethod,
         computedFinalPrice,
-        IsStudent
+        IsStudent ?? false
       ]
     );
 
     res.json({ message: "Appointment created successfully" });
   } catch (err) {
     console.error("❌ Appointment Create Error:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    res.status(500).json({
+      error: "Server error creating appointment",
+      details: err.message
+    });
   }
 });
 
@@ -94,7 +124,9 @@ router.post("/", async (req, res) => {
 router.get("/latest-medical-aid/:patientId", async (req, res) => {
   try {
     const patientId = parseInt(req.params.patientId, 10);
-    if (isNaN(patientId)) return res.status(400).json({ message: "Invalid PatientID" });
+    if (isNaN(patientId)) {
+      return res.status(400).json({ message: "Invalid PatientID" });
+    }
 
     const result = await query(
       `SELECT TOP 1
@@ -113,7 +145,10 @@ router.get("/latest-medical-aid/:patientId", async (req, res) => {
     res.json(result[0] || null);
   } catch (err) {
     console.error("❌ Fetch latest medical aid error:", err);
-    res.status(500).json({ error: "Failed to fetch medical aid details", details: err.message });
+    res.status(500).json({
+      error: "Failed to fetch medical aid details",
+      details: err.message
+    });
   }
 });
 
@@ -154,12 +189,17 @@ router.get("/:id", async (req, res) => {
       [id]
     );
 
-    if (!result.length) return res.status(404).json({ message: "Appointment not found" });
+    if (!result.length) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
 
     res.json(result[0]);
   } catch (err) {
     console.error("❌ Error fetching appointment by id:", err);
-    res.status(500).json({ error: "Server error fetching appointment", details: err.message });
+    res.status(500).json({
+      error: "Server error fetching appointment",
+      details: err.message
+    });
   }
 });
 
@@ -195,14 +235,25 @@ router.put("/:id", async (req, res) => {
 
     allowed.forEach((field) => {
       if (Object.prototype.hasOwnProperty.call(body, field)) {
+        let value = body[field];
+
+        // ✅ Convert date fields safely
+        if (field === "StartTime" || field === "EndTime") {
+          const d = new Date(value);
+          if (isNaN(d)) return;
+          value = d;
+        }
+
         updates.push(`[${field}] = @p${params.length}`);
-        params.push(body[field]);
+        params.push(value);
       }
     });
 
-    if (!updates.length) return res.status(400).json({ message: "No updatable fields provided." });
+    if (!updates.length) {
+      return res.status(400).json({ message: "No updatable fields provided." });
+    }
 
-    params.push(id); // last param is id
+    params.push(id);
 
     await query(
       `UPDATE Appointments
@@ -214,7 +265,10 @@ router.put("/:id", async (req, res) => {
     res.json({ message: "Appointment updated successfully" });
   } catch (err) {
     console.error("❌ Update appointment error:", err);
-    res.status(500).json({ error: "Failed to update appointment", details: err.message });
+    res.status(500).json({
+      error: "Failed to update appointment",
+      details: err.message
+    });
   }
 });
 
@@ -233,7 +287,10 @@ router.delete("/:id", async (req, res) => {
     res.json({ message: "Appointment deleted successfully" });
   } catch (err) {
     console.error("❌ Delete appointment error:", err);
-    res.status(500).json({ error: "Failed to delete appointment", details: err.message });
+    res.status(500).json({
+      error: "Failed to delete appointment",
+      details: err.message
+    });
   }
 });
 
