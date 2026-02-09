@@ -183,9 +183,15 @@ const BookAppointment = () => {
     }
 
     try {
+      // ✅ FIX TIMEZONE: convert local time to UTC
+    const localDateTime = new Date(`${appointmentDate}T${appointmentTime}`);
+
+    const utcDateTime = new Date(
+      localDateTime.getTime() - localDateTime.getTimezoneOffset() * 60000
+    );
       const appointmentData = {
         PatientID: parseInt(selectedPatient),
-        StartTime: `${appointmentDate}T${appointmentTime}`,
+        StartTime: utcDateTime.toISOString(),
         EndTime: null,
         UserID: parseInt(selectedNurse),
         ServiceName: selectedService,
