@@ -12,7 +12,7 @@ router.post("/", async (req, res) => {
     const {
       PatientID,
       StartTime,
-      EndTime, // ✅ may be NULL
+      EndTime,
       UserID,
       ServiceName,
       PaymentMethod,
@@ -27,9 +27,9 @@ router.post("/", async (req, res) => {
     } = req.body;
 
     /* -------------------------
-       ✅ VALIDATE DATES (NULL-SAFE)
+       ✅ LOCAL-TIME SAFE DATE HANDLING
     -------------------------- */
-    const start = new Date(StartTime);
+    const start = new Date(StartTime.replace("T", " "));
 
     if (isNaN(start)) {
       return res.status(400).json({
@@ -40,7 +40,7 @@ router.post("/", async (req, res) => {
 
     let end = null;
     if (EndTime !== null && EndTime !== undefined) {
-      end = new Date(EndTime);
+      end = new Date(EndTime.replace("T", " "));
       if (isNaN(end)) {
         return res.status(400).json({
           error: "Invalid EndTime format",
@@ -101,7 +101,7 @@ router.post("/", async (req, res) => {
       [
         PatientID,
         MedicalAidNumber ?? null,
-        start,           // ✅ always valid
+        start,           // ✅ saved exactly as selected
         end,             // ✅ NULL allowed
         UserID,
         MedicalAidName ?? null,
@@ -246,9 +246,9 @@ router.put("/:id", async (req, res) => {
       if (Object.prototype.hasOwnProperty.call(body, field)) {
         let value = body[field];
 
-        // ✅ NULL-safe date handling
+        // ✅ LOCAL TIME SAFE
         if (field === "StartTime" && value) {
-          const d = new Date(value);
+          const d = new Date(value.replace("T", " "));
           if (isNaN(d)) return;
           value = d;
         }
@@ -257,7 +257,7 @@ router.put("/:id", async (req, res) => {
           if (value === null) {
             value = null;
           } else {
-            const d = new Date(value);
+            const d = new Date(value.replace("T", " "));
             if (isNaN(d)) return;
             value = d;
           }
