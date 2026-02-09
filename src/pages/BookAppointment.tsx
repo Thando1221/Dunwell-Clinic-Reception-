@@ -1,5 +1,5 @@
 // Updated BookAppointment.tsx with Nurse/Doctor dropdown added
-// --- Paste this file into your project ---
+// ✅ FIXED timezone issue (no more +2 hours)
 
 import { useState, useEffect, useMemo, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -183,15 +183,12 @@ const BookAppointment = () => {
     }
 
     try {
-      // ✅ FIX TIMEZONE: convert local time to UTC
-    const localDateTime = new Date(`${appointmentDate}T${appointmentTime}`);
+      // ✅ FIXED: no UTC conversion, send local datetime as-is
+      const startDateTime = `${appointmentDate}T${appointmentTime}`;
 
-    const utcDateTime = new Date(
-      localDateTime.getTime() - localDateTime.getTimezoneOffset() * 60000
-    );
       const appointmentData = {
         PatientID: parseInt(selectedPatient),
-        StartTime: utcDateTime.toISOString(),
+        StartTime: startDateTime, // local time exactly as selected
         EndTime: null,
         UserID: parseInt(selectedNurse),
         ServiceName: selectedService,
@@ -234,8 +231,6 @@ const BookAppointment = () => {
 
   return (
     <div className="space-y-6">
-      {/* EVERYTHING BELOW IS 100% UNCHANGED */}
-      {/* Your full JSX exactly as provided */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
           <ArrowLeft className="h-5 w-5" />
