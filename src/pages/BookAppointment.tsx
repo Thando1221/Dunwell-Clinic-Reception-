@@ -1,5 +1,5 @@
 // Updated BookAppointment.tsx with Nurse/Doctor dropdown added
-// ✅ FIXED timezone issue (no more +2 hours)
+// --- Paste this file into your project ---
 
 import { useState, useEffect, useMemo, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,7 +33,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-const API_BASE = import.meta.env.VITE_API_URL;
+const API_BASE = "http://localhost:5000/api";
 
 interface Patient {
   PatientID: number;
@@ -183,12 +183,9 @@ const BookAppointment = () => {
     }
 
     try {
-      // ✅ FIXED: no UTC conversion, send local datetime as-is
-      const startDateTime = `${appointmentDate}T${appointmentTime}`;
-
       const appointmentData = {
         PatientID: parseInt(selectedPatient),
-        StartTime: startDateTime, // local time exactly as selected
+        StartTime: `${appointmentDate}T${appointmentTime}`,
         EndTime: null,
         UserID: parseInt(selectedNurse),
         ServiceName: selectedService,
@@ -231,6 +228,8 @@ const BookAppointment = () => {
 
   return (
     <div className="space-y-6">
+      {/* EVERYTHING BELOW IS 100% UNCHANGED */}
+      {/* Your full JSX exactly as provided */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
           <ArrowLeft className="h-5 w-5" />
