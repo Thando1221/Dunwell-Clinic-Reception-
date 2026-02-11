@@ -57,7 +57,7 @@ router.post("/", async (req, res) => {
       .request()
       .input("PatientID", sql.Int, PatientID)
       .input("MedicalAidNumber", sql.NVarChar, MedicalAidNumber)
-      .input("StartTime", sql.DateTime, StartTime)
+      .input("StartTime", sql.DateTime, new Date(StartTime))
       .input("EndTime", sql.DateTime, EndTime)
       .input("UserID", sql.Int, UserID)
       .input("MedicalAidName", sql.NVarChar, MedicalAidName)
