@@ -183,32 +183,38 @@ const BookAppointment = () => {
     }
 
     try {
-      const appointmentData = {
-        PatientID: parseInt(selectedPatient),
-        StartTime: `${appointmentDate}T${appointmentTime}`,
-        EndTime: null,
-        UserID: parseInt(selectedNurse),
-        ServiceName: selectedService,
-        PaymentMethod: paymentMethod.toUpperCase(),
-        IsStudent: isStudent,
-        Status: "InPatient",
-        MedicalAidNumber:
-          paymentMethod === "medical-aid" ? medicalAidNumber : null,
-        MedicalAidName:
-          paymentMethod === "medical-aid"
-            ? medicalAidName
-            : paymentMethod === "cash"
-            ? "Cash"
-            : paymentMethod === "card"
-            ? "Card"
-            : null,
-        MedicalAid_MainMember:
-          paymentMethod === "medical-aid" ? medicalAidMainMember : null,
-        MainMember__IDNo:
-          paymentMethod === "medical-aid" ? mainMemberIdNo : null,
-        MedicalAid_option:
-          paymentMethod === "medical-aid" ? medicalAidOption : null,
-      };
+     // ✅ Create proper local Date object (prevents +2 hour shift)
+const localStart = new Date(
+  `${appointmentDate}T${appointmentTime}:00`
+);
+
+const appointmentData = {
+  PatientID: parseInt(selectedPatient),
+  StartTime: localStart,
+  EndTime: null,
+  UserID: parseInt(selectedNurse),
+  ServiceName: selectedService,
+  PaymentMethod: paymentMethod.toUpperCase(),
+  IsStudent: isStudent,
+  Status: "InPatient",
+  MedicalAidNumber:
+    paymentMethod === "medical-aid" ? medicalAidNumber : null,
+  MedicalAidName:
+    paymentMethod === "medical-aid"
+      ? medicalAidName
+      : paymentMethod === "cash"
+      ? "Cash"
+      : paymentMethod === "card"
+      ? "Card"
+      : null,
+  MedicalAid_MainMember:
+    paymentMethod === "medical-aid" ? medicalAidMainMember : null,
+  MainMember__IDNo:
+    paymentMethod === "medical-aid" ? mainMemberIdNo : null,
+  MedicalAid_option:
+    paymentMethod === "medical-aid" ? medicalAidOption : null,
+};
+
 
       const res = await fetch(`${API_BASE}/appointments`, {
         method: "POST",
