@@ -33,7 +33,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-const API_BASE = "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface Patient {
   PatientID: number;
