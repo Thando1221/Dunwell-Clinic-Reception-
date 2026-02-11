@@ -1,13 +1,15 @@
 // routes/appointments.js
+
 import express from "express";
 import sql from "mssql";
-import poolPromise from "../db.js";
+import getPool from "../db.js";
 
 const router = express.Router();
 
 /**
+ * ===============================
  * POST /api/appointments
- * Create appointment
+ * ===============================
  */
 router.post("/", async (req, res) => {
   try {
@@ -28,8 +30,9 @@ router.post("/", async (req, res) => {
       FinalPrice
     } = req.body;
 
-    const pool = await poolPromise;
+    const pool = await getPool(); // ✅ FIXED
 
+    // 🔎 Get service price
     const priceResult = await pool
       .request()
       .input("ServiceName", sql.NVarChar, ServiceName)
@@ -44,9 +47,12 @@ router.post("/", async (req, res) => {
     }
 
     const { Price, discount } = priceResult.recordset[0];
-    const computedFinalPrice =
-      FinalPrice ?? (IsStudent && discount > 0 ? discount : Price);
 
+    const computedFinalPrice =
+      FinalPrice ??
+      (IsStudent && discount > 0 ? discount : Price);
+
+    // 📝 Insert appointment
     await pool
       .request()
       .input("PatientID", sql.Int, PatientID)
@@ -102,20 +108,25 @@ router.post("/", async (req, res) => {
       `);
 
     res.json({ message: "Appointment created successfully" });
+
   } catch (err) {
     console.error("❌ Appointment Create Error:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    res.status(500).json({
+      error: "Server error",
+      details: err.message
+    });
   }
 });
 
+
 /**
- * GET /api/appointments/latest-medical-aid/:patientId
- * Fetch latest medical aid details for a patient
- * ONLY requires MedicalAidName to be non-empty
+ * ===============================
+ * GET latest medical aid
+ * ===============================
  */
 router.get("/latest-medical-aid/:patientId", async (req, res) => {
   try {
-    const pool = await poolPromise;
+    const pool = await getPool(); // ✅ FIXED
     const patientId = parseInt(req.params.patientId, 10);
 
     if (isNaN(patientId)) {
@@ -143,18 +154,22 @@ router.get("/latest-medical-aid/:patientId", async (req, res) => {
     }
 
     res.json(result.recordset[0]);
+
   } catch (err) {
     console.error("❌ Fetch latest medical aid error:", err);
     res.status(500).json({ error: "Failed to fetch medical aid details" });
   }
 });
 
+
 /**
- * GET /api/appointments/:id
+ * ===============================
+ * GET appointment by ID
+ * ===============================
  */
 router.get("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
+    const pool = await getPool(); // ✅ FIXED
     const id = parseInt(req.params.id, 10);
 
     const result = await pool
@@ -194,6 +209,7 @@ router.get("/:id", async (req, res) => {
     }
 
     res.json(result.recordset[0]);
+
   } catch (err) {
     console.error("❌ Error fetching appointment by id:", err);
     res.status(500).json({
@@ -203,71 +219,15 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-/**
- * PUT /api/appointments/:id
- */
-router.put("/:id", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const id = parseInt(req.params.id, 10);
-    const body = req.body || {};
-
-    const allowed = [
-      "StartTime",
-      "EndTime",
-      "UserID",
-      "MedicalAidName",
-      "MedicalAidNumber",
-      "MedicalAid_option",
-      "PaymentMethod",
-      "Status",
-      "ServiceName",
-      "ServicePrice",
-      "FinalPrice",
-      "isFollow_Up",
-      "IsStudent",
-      "MedicalAid_MainMember",
-      "MainMember__IDNo",
-      "PatientID"
-    ];
-
-    const setClauses = [];
-    const request = pool.request();
-    request.input("id", sql.Int, id);
-
-    allowed.forEach((field) => {
-      if (Object.prototype.hasOwnProperty.call(body, field)) {
-        setClauses.push(`[${field}] = @${field}`);
-        request.input(field, body[field]);
-      }
-    });
-
-    if (!setClauses.length) {
-      return res.status(400).json({ message: "No updatable fields provided." });
-    }
-
-    await request.query(`
-      UPDATE Appointments
-      SET ${setClauses.join(", ")}
-      WHERE AppointID = @id
-    `);
-
-    res.json({ message: "Appointment updated successfully" });
-  } catch (err) {
-    console.error("❌ Update appointment error:", err);
-    res.status(500).json({
-      message: "Failed to update appointment",
-      error: err.message
-    });
-  }
-});
 
 /**
- * DELETE /api/appointments/:id
+ * ===============================
+ * DELETE appointment
+ * ===============================
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const pool = await poolPromise;
+    const pool = await getPool(); // ✅ FIXED
     const id = parseInt(req.params.id, 10);
 
     await pool
@@ -276,6 +236,7 @@ router.delete("/:id", async (req, res) => {
       .query("DELETE FROM Appointments WHERE AppointID = @id");
 
     res.json({ message: "Appointment deleted successfully" });
+
   } catch (err) {
     console.error("❌ Delete appointment error:", err);
     res.status(500).json({
