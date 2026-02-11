@@ -1,6 +1,7 @@
 // routes/appointments.js
 import express from "express";
-import { query } from "../db.js";
+import sql from "mssql";
+import poolPromise from "../db.js";
 
 const router = express.Router();
 
@@ -27,66 +28,65 @@ router.post("/", async (req, res) => {
       FinalPrice
     } = req.body;
 
-    // Get service price and discount
-    const serviceResult = await query(
-      `SELECT Price, discount FROM Catalogue WHERE Name = @p0`,
-      [ServiceName]
-    );
+    const pool = await poolPromise;
 
-    if (!serviceResult.length) return res.status(400).json({ message: "Service not found" });
+    // Fetch service price and discount
+    const priceResult = await pool
+      .request()
+      .input("ServiceName", sql.NVarChar, ServiceName)
+      .query(`
+        SELECT Price, discount
+        FROM Catalogue
+        WHERE Name = @ServiceName
+      `);
 
-    const { Price, discount } = serviceResult[0];
+    if (!priceResult.recordset.length) {
+      return res.status(400).json({ message: "Service not found" });
+    }
+
+    const { Price, discount } = priceResult.recordset[0];
     const computedFinalPrice = FinalPrice ?? (IsStudent && discount > 0 ? discount : Price);
 
-    await query(
-      `INSERT INTO Appointments (
-        PatientID,
-        MedicalAidNumber,
-        StartTime,
-        EndTime,
-        UserID,
-        MedicalAidName,
-        Status,
-        ServiceName,
-        ServicePrice,
-        MedicalAid_MainMember,
-        MainMember__IDNo,
-        MedicalAid_option,
-        PaymentMethod,
-        FinalPrice,
-        IsStudent
-      ) VALUES (
-        @p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10, @p11, @p12, @p13, @p14
-      )`,
-      [
-        PatientID,
-        MedicalAidNumber,
-        StartTime,
-        EndTime,
-        UserID,
-        MedicalAidName,
-        Status,
-        ServiceName,
-        Price,
-        MedicalAid_MainMember,
-        MainMember__IDNo,
-        MedicalAid_option,
-        PaymentMethod,
-        computedFinalPrice,
-        IsStudent ? 1 : 0
-      ]
-    );
+    // Insert appointment
+    await pool
+      .request()
+      .input("PatientID", sql.Int, PatientID)
+      .input("MedicalAidNumber", sql.NVarChar, MedicalAidNumber)
+      .input("StartTime", sql.DateTime, new Date(StartTime))
+      .input("EndTime", sql.DateTime, new Date(EndTime))
+      .input("UserID", sql.Int, UserID)
+      .input("MedicalAidName", sql.NVarChar, MedicalAidName)
+      .input("Status", sql.NVarChar, Status)
+      .input("ServiceName", sql.NVarChar, ServiceName)
+      .input("ServicePrice", sql.Decimal(10, 2), Price)
+      .input("MedicalAid_MainMember", sql.NVarChar, MedicalAid_MainMember)
+      .input("MainMember__IDNo", sql.NVarChar, MainMember__IDNo)
+      .input("MedicalAid_option", sql.NVarChar, MedicalAid_option)
+      .input("PaymentMethod", sql.NVarChar, PaymentMethod)
+      .input("FinalPrice", sql.Decimal(10, 2), computedFinalPrice)
+      .input("IsStudent", sql.Bit, IsStudent ? 1 : 0)
+      .query(`
+        INSERT INTO Appointments (
+          PatientID, MedicalAidNumber, StartTime, EndTime, UserID, MedicalAidName,
+          Status, ServiceName, ServicePrice, MedicalAid_MainMember, MainMember__IDNo,
+          MedicalAid_option, PaymentMethod, FinalPrice, IsStudent
+        ) VALUES (
+          @PatientID, @MedicalAidNumber, @StartTime, @EndTime, @UserID, @MedicalAidName,
+          @Status, @ServiceName, @ServicePrice, @MedicalAid_MainMember, @MainMember__IDNo,
+          @MedicalAid_option, @PaymentMethod, @FinalPrice, @IsStudent
+        )
+      `);
 
     res.json({ message: "Appointment created successfully" });
   } catch (err) {
     console.error("❌ Appointment Create Error:", err);
-    res.status(500).json({ message: "Server error creating appointment", error: err.message });
+    res.status(500).json({ message: "Failed to create appointment", error: err.message });
   }
 });
 
 /**
  * GET /api/appointments
- * Fetch today's appointments (joined with patient & doctor)
+ * Fetch today's appointments (joined patient & doctor)
  */
 router.get("/", async (req, res) => {
   try {
@@ -219,7 +219,6 @@ router.put("/:id", async (req, res) => {
 
     await query(`UPDATE Appointments SET ${setClauses.join(", ")} WHERE AppointID = @p${params.length - 1}`, params);
 
-    // Return updated appointment
     const updated = await query(
       `
         SELECT 
